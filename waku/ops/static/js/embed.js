@@ -275,8 +275,9 @@ function drawRing(state){
     } else state.level = Math.max(0.06, state.level * 0.95);
     // Until the person first speaks, the ring breathes: it grows and shrinks
     // once every 1.6s, so the screen shows it is listening before any sound.
+    if (state.began === undefined) state.began = now;   // the first breath starts small, at the click
     if (state.level > 0.3) state.spoke = true;
-    const target = state.spoke ? state.level : 0.02 + 0.5 * (0.5 - 0.5 * Math.cos(now / 1600 * 2 * Math.PI));
+    const target = state.spoke ? state.level : 0.06 + 0.26 * (0.5 - 0.5 * Math.cos((now - state.began) / 3600 * 2 * Math.PI));
     // Rises fast and falls slower, so each syllable shows as its own swell.
     amp += (target - amp) * (target > amp ? 0.35 : 0.1);
     const ground = tokenRGB(probe, "--surface-bg");
