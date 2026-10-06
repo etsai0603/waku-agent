@@ -1033,7 +1033,8 @@ body.embed #dock{position:relative;width:100%;height:100vh;border-left:none}
 @media (prefers-reduced-motion:reduce){.think-bird,.think-words{animation:none}}
 
 /* Listening: the chat column turns into a dithered ring in the body-text
-   grey, over the page ground (spec 054, the ListeningRing). */
+   grey, over the page ground (spec 054, the ListeningRing). The centre dot
+   is drawn by the same shader, so #listen-done is an invisible press area. */
 #listen{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;background:var(--surface-bg)}
 #listen[hidden]{display:none}
 #listen-ring{position:absolute;inset:0;width:100%;height:100%}
@@ -1041,7 +1042,7 @@ body.embed #dock{position:relative;width:100%;height:100vh;border-left:none}
 .listen-label{font-family:var(--face-mono);font-size:var(--text-xs);text-transform:uppercase;letter-spacing:var(--tracking-label);color:var(--text-faint)}
 #listen-done{position:absolute;top:50%;left:50%;width:calc(var(--spacing) * 8);height:calc(var(--spacing) * 8);
   transform:translate(-50%,-50%);border:0;border-radius:var(--shape-circle);
-  background:var(--text-muted);cursor:pointer}
+  background:transparent;cursor:pointer}
 #listen-done:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
 .listen-words{position:relative;margin:auto var(--space-3) var(--space-4);min-height:calc(var(--spacing) * 20);
   display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-3);background:var(--surface-paper);border:var(--rule-width) solid var(--rule-hard);border-radius:var(--radius);

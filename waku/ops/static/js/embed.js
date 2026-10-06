@@ -233,7 +233,8 @@ void main(){vec2 uv=gl_FragCoord.xy/uResolution*2.0-1.0;uv.x*=uResolution.x/uRes
  float r=0.21+a*0.11+sin(t*0.9)*0.012;float th=0.07+a*0.05+sin(t*0.63)*0.009;
  float d=length(uv);float ring=smoothstep(r+th,r,d)-smoothstep(r,r-th,d);
  float glow=exp(-14.0*abs(d-r));float halo=exp(-6.5*d*(1.0+a*0.35));
- float k=clamp(ring*0.75+glow*0.5+halo*0.08,0.0,1.0);
+ float s=0.045+a*0.03;float core=exp(-d*d/(2.0*s*s))*0.8;
+ float k=clamp(max(ring*0.75+glow*0.5+halo*0.08,core),0.0,1.0);
  gl_FragColor=vec4(mix(uBg,uInk,step(bayer(gl_FragCoord.xy),k)),1.0);}`;
 
 // A token as the shader's [r, g, b], laid over the ground when it is see-through.
@@ -285,7 +286,6 @@ function drawRing(state){
     gl.uniform2f(u("uResolution"), w, h);
     gl.uniform3fv(u("uInk"), tokenRGB(probe, "--text-muted", ground)); gl.uniform3fv(u("uBg"), ground);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
-    document.getElementById("listen-done").style.transform = `translate(-50%, -50%) scale(${1 + amp * 0.12})`;
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
