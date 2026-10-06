@@ -336,6 +336,11 @@ function wireVoice(){
   button.onclick = startListening;
   document.getElementById("listen-cancel").onclick = () => stopListening(false);
   document.getElementById("listen-done").onclick = () => stopListening(true);
+  // Send sends what was said at once; the dot only puts it in the field.
+  document.getElementById("listen-send").onclick = () => {
+    const input = document.getElementById("dmsg");
+    if (listening && listening.words && input){ stopListening(true); sendChat(input); }
+  };
 }
 
 // --- bootstrap --------------------------------------------------------------

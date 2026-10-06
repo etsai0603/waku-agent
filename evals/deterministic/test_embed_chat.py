@@ -977,5 +977,6 @@ def test_the_embed_page_offers_voice_only_where_the_browser_can_transcribe():
     js = (JS / "embed.js").read_text(encoding="utf-8")
     assert "window.SpeechRecognition || window.webkitSpeechRecognition" in js
     assert "if (!button || !SpeechRec) return;" in js
+    assert '<button id="listen-send"' in EMBED, "the words' card has a Send of its own"
     assert js.index("getUserMedia") > js.index("async function startListening"), \
         "the microphone opens only inside the click's handler"

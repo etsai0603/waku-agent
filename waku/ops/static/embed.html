@@ -37,13 +37,14 @@
   <!-- While the person speaks, the whole chat column turns into a dithered
        ring that grows with their voice (Waku Memory spec 054, the
        ListeningRing). The dot in the middle ends the recording and puts the
-       words in the field, unsent. -->
+       words in the field, unsent. Send under the words sends them at once. -->
   <div id="listen" hidden>
     <canvas id="listen-ring" aria-hidden="true"></canvas>
     <div class="listen-top"><span class="listen-label">Listening</span>
       <button id="listen-cancel" class="btn btn-secondary btn-sm">Cancel</button></div>
     <button id="listen-done" aria-label="Done"></button>
-    <div id="listen-words" class="listen-words">&hellip;</div>
+    <div class="listen-words"><div id="listen-words">&hellip;</div>
+      <button id="listen-send" class="btn btn-primary btn-sm">Send</button></div>
   </div>
 </aside>
 <!-- The same classic scripts as the dashboard, minus every view: embed.js
