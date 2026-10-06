@@ -919,3 +919,63 @@ def test_an_ended_session_on_the_dashboard_button_tells_the_parent():
 
 def test_the_header_has_the_dashboard_button():
     assert 'onclick="openDashboard()"' in EMBED
+
+
+# --- Waku Memory spec 054: the greeting, the thinking line and voice ---------------
+
+
+@needs_node
+def test_an_empty_embedded_chat_greets_and_offers_three_starters():
+    got = _node({"files": CHAT_FILES, "referrer": "", "origins": DEFAULT, "framed": False,
+                 "events": [], "state": 200}, """
+    console.log(JSON.stringify({log: vm.runInContext("renderChatLog", ctx)()}));""")
+    log = got["log"]
+    assert "What should Waku remember today?" in log
+    assert log.count('class="starter" onclick="useStarter(this)"') == 3
+    assert "Fetch me everything about the database." in log
+    assert "Message Waku here" not in log, "the greeting replaces the old empty sentence"
+
+
+@needs_node
+def test_a_starter_fills_the_field_and_sends_nothing():
+    got = _node({"files": CHAT_FILES, "referrer": "", "origins": DEFAULT, "framed": False,
+                 "events": [], "state": 200}, """
+    const input = {value: "", focused: false, focus(){ this.focused = true; }};
+    ctx.document.getElementById = id => id === "dmsg" ? input : null;
+    vm.runInContext("useStarter", ctx)({textContent: "Remember that I prefer pnpm over npm."});
+    console.log(JSON.stringify({value: input.value, focused: input.focused,
+                                chat: vm.runInContext("CHAT.length", ctx)}));""")
+    assert got == {"value": "Remember that I prefer pnpm over npm.", "focused": True, "chat": 0}
+
+
+@needs_node
+def test_a_waiting_turn_shows_the_bird_and_a_phrase_for_its_step():
+    got = _node({"files": CHAT_FILES, "referrer": "", "origins": DEFAULT, "framed": False,
+                 "events": [], "state": 200}, """
+    const line = vm.runInContext("thinkingLine", ctx), pools = vm.runInContext("THINKING", ctx);
+    const turn = {role: "waku", pending: true, stream: "", started: 1000, seed: 0};
+    const at = (m, now) => line(m, now);
+    console.log(JSON.stringify({
+      pools,
+      early: at(turn, 2000), late: at(turn, 9000),
+      tooled: at({...turn, tools: [{name: "recall"}]}, 2000),
+      card: vm.runInContext("streamingCard", ctx)({...turn, started: Date.now()})}));""")
+    pools = got["pools"]
+    assert all(len(p) >= 2 for p in pools.values()), "every step has more than one phrase"
+    assert any(p in got["early"] for p in pools["search"]), "the first seconds are a search"
+    assert any(p in got["late"] for p in pools["answer"]), "after the search, an answer is on its way"
+    assert any(p in got["tooled"] for p in pools["tools"]), "a tool that ran is a find"
+    assert 'class="think-bird"' in got["card"] and 'role="status"' in got["card"]
+    assert "thinking&hellip;" not in got["card"]
+
+
+def test_the_embed_page_offers_voice_only_where_the_browser_can_transcribe():
+    """The button ships hidden and embed.js shows it only when the browser has
+    speech recognition. The local-Whisper mic (#mic) is still not on the page."""
+    assert re.search(r'<button id="dvoice"[^>]*\bhidden\b', EMBED)
+    assert 'id="mic"' not in EMBED
+    js = (JS / "embed.js").read_text(encoding="utf-8")
+    assert "window.SpeechRecognition || window.webkitSpeechRecognition" in js
+    assert "if (!button || !SpeechRec) return;" in js
+    assert js.index("getUserMedia") > js.index("async function startListening"), \
+        "the microphone opens only inside the click's handler"

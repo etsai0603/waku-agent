@@ -360,10 +360,35 @@ const streamingCard = m => uiCard(`
   ${reportCard(m.report)}
   ${m.stream
      ? `<div class="r" style="margin-top:var(--space-2)">${renderMarkdown(m.stream)}<span class="caret"></span></div>`
-     : `<div class="meta" style="margin:0">thinking&hellip;${m.started?` ${Math.round((Date.now()-m.started)/1000)}s`:""}${
+     : `${thinkingLine(m)}${
          m.started && Date.now()-m.started > 20000
-         ? `<br>still waiting: slow models (free tiers especially) can queue for a while; this errors out at the WAKU_LLM_TIMEOUT limit instead of hanging forever`
-         : ""}</div>`}`, {cls: "reply"});
+         ? `<div class="meta" style="margin:var(--space-2) 0 0">still waiting: slow models (free tiers especially) can queue for a while; this errors out at the WAKU_LLM_TIMEOUT limit instead of hanging forever</div>`
+         : ""}`}`, {cls: "reply"});
+
+// What Waku says while a turn runs and no reply text has arrived yet: a
+// pecking bird and one phrase. Each step of the turn has its own phrases, and
+// every phrase is true of its step (Waku Memory spec 054, the ThinkingLine).
+// The log is redrawn every second, so each animation starts at a negative
+// delay taken from the clock: a redraw continues the peck instead of
+// restarting it.
+const THINKING = {
+  search: ["Foraging through your memories…", "Pecking through your memories…", "Hopping branch to branch…"],
+  tools:  ["Digging up a buried seed…", "Found a shiny one…", "Ruffling feathers…"],
+  answer: ["Flying back with it…", "Hatching an answer…", "Chirping…"],
+};
+function thinkingStep(m, now){
+  if ((m.tools || []).length) return "tools";
+  return now - (m.started || now) < 2700 ? "search" : "answer";
+}
+function thinkingLine(m, now = Date.now()){
+  const pool = THINKING[thinkingStep(m, now)];
+  const elapsed = now - (m.started || now);
+  const phrase = pool[((m.seed || 0) + Math.floor(elapsed / 2700)) % pool.length];
+  const secs = m.started ? ` <span class="think-secs">${Math.round(elapsed / 1000)}s</span>` : "";
+  return `<div class="thinking" role="status">`
+    + `<span class="think-bird" style="animation-delay:-${now % 1100}ms" aria-hidden="true"></span>`
+    + `<span class="think-words" style="animation-delay:-${now % 1800}ms">${phrase}</span>${secs}</div>`;
+}
 
 // Messages loaded from history (a switched/opened conversation) have no live
 // latency/iteration data.
@@ -371,12 +396,32 @@ const historicalCard = m => uiCard(`
   ${msgCopy(m.reply)}
   <div class="r">${renderMarkdown(m.reply)}</div>`, {cls: "reply"});
 
+// The embedded chat opens on a greeting and three starter prompts, the same
+// ones the phone app shows (Waku Memory spec 054). A starter fills the field
+// and sends nothing: the person reads it, edits it, then sends.
+const STARTERS = [
+  "Remember that I prefer pnpm over npm.",
+  "What did Claude Code save about me this week?",
+  "Fetch me everything about the database.",
+];
+function greeting(){
+  return `<div class="greet"><h2>What should Waku remember today?</h2><div class="starters">${
+    STARTERS.map(s => `<button type="button" class="starter" onclick="useStarter(this)">${esc(s)}</button>`).join("")
+  }</div></div>`;
+}
+function useStarter(button){
+  const input = document.getElementById("dmsg");
+  if (!input) return;
+  input.value = button.textContent;
+  autogrow(input);
+  input.focus();
+}
+
 function renderChatLog(){
   if (!CHAT.length)
-    return `<div class="empty" style="padding:calc(var(--spacing) * 1.5) calc(var(--spacing) * 0.5)">${
-      document.body.classList.contains("embed")   // the embedded chat has no tabs to point at
-      ? "Message Waku here. Every tool call and reply shows as it runs."
-      : "Message Waku here from any tab. Open Overview to watch it flow through the harness, or the Gateway tab to see every channel's messages together."}</div>`;
+    return document.body.classList.contains("embed")   // the embedded chat has no tabs to point at
+      ? greeting()
+      : `<div class="empty" style="padding:calc(var(--spacing) * 1.5) calc(var(--spacing) * 0.5)">Message Waku here from any tab. Open Overview to watch it flow through the harness, or the Gateway tab to see every channel's messages together.</div>`;
   return CHAT.map(m => m.role==="user"
       ? `<div class="bubble">${esc(m.text)}</div>`
       : m.pending ? streamingCard(m)
@@ -465,7 +510,8 @@ async function sendChat(fromInput){
   input.value = "";
   autogrow(input);          // an emptied box must shrink back to one row
   CHAT.push({role:"user", text});
-  const pending = {role:"waku", pending:true, stream:"", started: Date.now()};
+  const pending = {role:"waku", pending:true, stream:"", started: Date.now(),
+                   seed: Math.floor(Math.random() * 3)};   // which phrase each step starts on
   CHAT.push(pending);
   syncChatLogs();
   // tick the elapsed counter while we wait for the first token

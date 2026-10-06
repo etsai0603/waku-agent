@@ -1005,7 +1005,47 @@ dialog.dialog :focus-visible{outline:var(--focus-ring-width) solid var(--accent)
    The chat column alone, filling whatever frame waku.one gives it. Last in the
    file so it wins over the dock's width clamp and the narrow-screen rule
    that pins the dock over the page. */
-body.embed #dock{position:static;width:100%;height:100vh;border-left:none}
+body.embed #dock{position:relative;width:100%;height:100vh;border-left:none}
+
+/* An empty embedded chat: a greeting and three starter prompts (Waku Memory
+   spec 054). Square corners, as everywhere on the desktop: the soft corners
+   are the phone app's alone. */
+.greet{margin:auto 0;display:flex;flex-direction:column;gap:var(--space-6);padding:0 calc(var(--spacing) * 0.5)}
+.greet h2{margin:0;font-family:var(--face-sans);font-size:var(--text-xl);font-weight:var(--font-weight-medium);
+  line-height:var(--leading-snug);color:var(--text-ink);text-transform:none;letter-spacing:0}
+.starters{display:flex;flex-wrap:wrap;gap:var(--space-2)}
+.starter{font:inherit;font-size:var(--text-sm);line-height:var(--leading-snug);text-align:left;cursor:pointer;
+  color:var(--text-muted);background:transparent;border:var(--rule-width) solid var(--rule);border-radius:var(--radius);
+  padding:var(--space-2) var(--space-3)}
+.starter:hover,.starter:focus-visible{color:var(--text-ink);border-color:var(--rule-hard)}
+
+/* While a turn waits for its first words: a pecking bird and one phrase with
+   a light band sweeping across it (spec 054, the ThinkingLine). */
+.thinking{display:flex;align-items:center;gap:var(--space-2);min-height:calc(var(--spacing) * 6)}
+.think-bird{width:calc(var(--spacing) * 5);height:calc(var(--spacing) * 5);flex-shrink:0;background:var(--text-muted);
+  -webkit-mask:url("/static/waku-mark.svg") center/contain no-repeat;mask:url("/static/waku-mark.svg") center/contain no-repeat;
+  transform-origin:50% 90%;animation:peck 1.1s ease-in-out infinite}
+@keyframes peck{0%,55%,75%,100%{transform:rotate(0)}65%,85%{transform:rotate(-24deg)}}
+.think-words{background:linear-gradient(90deg,var(--text-faint) 0%,var(--text-faint) 35%,var(--text-ink) 50%,var(--text-faint) 65%,var(--text-faint) 100%);
+  background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 1.8s linear infinite}
+@keyframes shine{from{background-position:100% 0}to{background-position:0 0}}
+.think-secs{font-family:var(--face-mono);font-size:var(--text-xs);color:var(--text-faint)}
+@media (prefers-reduced-motion:reduce){.think-bird,.think-words{animation:none}}
+
+/* Listening: the chat column turns into a dithered ring in the body-text
+   grey, over the page ground (spec 054, the ListeningRing). */
+#listen{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;background:var(--surface-bg)}
+#listen[hidden]{display:none}
+#listen-ring{position:absolute;inset:0;width:100%;height:100%}
+.listen-top{position:relative;display:flex;align-items:center;justify-content:space-between;padding:var(--space-4) var(--space-3)}
+.listen-label{font-family:var(--face-mono);font-size:var(--text-xs);text-transform:uppercase;letter-spacing:var(--tracking-label);color:var(--text-faint)}
+#listen-done{position:absolute;top:50%;left:50%;width:calc(var(--spacing) * 8);height:calc(var(--spacing) * 8);
+  transform:translate(-50%,-50%);border:0;border-radius:var(--shape-circle);
+  background:var(--text-muted);cursor:pointer}
+#listen-done:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.listen-words{position:relative;margin:auto var(--space-3) var(--space-4);min-height:calc(var(--spacing) * 20);
+  padding:var(--space-3);background:var(--surface-paper);border:var(--rule-width) solid var(--rule-hard);border-radius:var(--radius);
+  color:var(--text-ink);line-height:var(--leading-snug)}
 
 /* --- Observability (spec 012): four tabs, each opening with one sentence,
    and a turn's waterfall (spec 016, at the end of this section). */

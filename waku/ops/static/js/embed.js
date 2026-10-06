@@ -214,10 +214,135 @@ function acceptParentMessage(event){
 }
 window.addEventListener("message", acceptParentMessage);
 
+// --- voice: the browser's own speech recognition -----------------------------
+// The dashboard's mic records audio for the local Whisper, which a hosted
+// container does not have. Here the browser turns speech into text itself, so
+// the button shows only where the browser can: Chrome, Edge and Safari. Chrome
+// sends the audio to Google to do it. Nothing records until the person clicks.
+// The ring's size follows the microphone's loudness, read every frame.
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+let listening = null;
+
+const RING_FRAG = `precision highp float;
+uniform float uTime; uniform float uAmplitude; uniform vec2 uResolution; uniform vec3 uInk; uniform vec3 uBg;
+float bayer(vec2 c){vec2 p=floor(mod(c,8.0));float x=p.x,y=p.y;
+ float i=1.0*mod(x,2.0)+2.0*mod(y,2.0)+4.0*mod(floor(x/2.0),2.0)+8.0*mod(floor(y/2.0),2.0)+16.0*mod(floor(x/4.0),2.0)+32.0*mod(floor(y/4.0),2.0);
+ return (i+0.5)/64.0;}
+void main(){vec2 uv=gl_FragCoord.xy/uResolution*2.0-1.0;uv.x*=uResolution.x/uResolution.y;
+ float t=uTime*0.5;float a=clamp(uAmplitude,0.0,1.2);
+ float r=0.21+a*0.11+sin(t*0.9)*0.012;float th=0.07+a*0.05+sin(t*0.63)*0.009;
+ float d=length(uv);float ring=smoothstep(r+th,r,d)-smoothstep(r,r-th,d);
+ float glow=exp(-14.0*abs(d-r));float halo=exp(-6.5*d*(1.0+a*0.35));
+ float k=clamp(ring*0.75+glow*0.5+halo*0.08,0.0,1.0);
+ gl_FragColor=vec4(mix(uBg,uInk,step(bayer(gl_FragCoord.xy),k)),1.0);}`;
+
+// A token as the shader's [r, g, b], laid over the ground when it is see-through.
+function tokenRGB(probe, token, ground){
+  probe.style.color = `var(${token})`;
+  const c = getComputedStyle(probe).color;
+  const n = (c.replace(/^color\(srgb/, "").match(/[\d.]+/g) || []).map(Number);
+  const rgb = c.startsWith("color(") ? n.slice(0, 3) : n.slice(0, 3).map(v => v / 255);
+  const a = n.length > 3 ? n[3] : 1;
+  return ground ? rgb.map((v, i) => v * a + ground[i] * (1 - a)) : rgb;
+}
+
+function drawRing(state){
+  const canvas = document.getElementById("listen-ring");
+  const gl = canvas && canvas.getContext("webgl", {antialias: false});
+  if (!gl) return;
+  const sh = (type, src) => { const x = gl.createShader(type); gl.shaderSource(x, src); gl.compileShader(x); return x; };
+  const prog = gl.createProgram();
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, "attribute vec2 p;void main(){gl_Position=vec4(p,0.0,1.0);}"));
+  gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, RING_FRAG));
+  gl.linkProgram(prog); gl.useProgram(prog);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, "p");
+  gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const u = n => gl.getUniformLocation(prog, n);
+  const probe = document.createElement("span"); probe.hidden = true; canvas.after(probe);
+  let amp = 0.08;
+  const frame = now => {
+    if (listening !== state) { probe.remove(); return; }
+    const box = canvas.getBoundingClientRect(), ratio = window.devicePixelRatio || 1;
+    const w = Math.round(box.width * ratio), h = Math.round(box.height * ratio);
+    if (canvas.width !== w || canvas.height !== h){ canvas.width = w; canvas.height = h; }
+    gl.viewport(0, 0, w, h);
+    if (state.analyser){
+      state.analyser.getFloatTimeDomainData(state.buf);
+      let sum = 0; for (const v of state.buf) sum += v * v;
+      state.level = Math.min(1.1, 0.04 + Math.sqrt(Math.sqrt(sum / state.buf.length)) * 1.6);
+    } else state.level = Math.max(0.06, state.level * 0.95);
+    // Rises fast and falls slower, so each syllable shows as its own swell.
+    amp += (state.level - amp) * (state.level > amp ? 0.35 : 0.1);
+    const ground = tokenRGB(probe, "--surface-bg");
+    gl.uniform1f(u("uTime"), now * 0.001); gl.uniform1f(u("uAmplitude"), amp);
+    gl.uniform2f(u("uResolution"), w, h);
+    gl.uniform3fv(u("uInk"), tokenRGB(probe, "--text-muted", ground)); gl.uniform3fv(u("uBg"), ground);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    document.getElementById("listen-done").style.transform = `translate(-50%, -50%) scale(${1 + amp * 0.12})`;
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+
+async function startListening(){
+  if (!SpeechRec || listening) return;
+  const state = {words: "", level: 0.06, rec: new SpeechRec(), stream: null, ctx: null, analyser: null};
+  listening = state;
+  const words = document.getElementById("listen-words");
+  words.textContent = "…";
+  document.getElementById("listen").hidden = false;
+  state.rec.continuous = true; state.rec.interimResults = true;
+  state.rec.lang = navigator.language || "en-US";
+  state.rec.onresult = e => {
+    let text = ""; for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
+    state.words = text.trim(); words.textContent = state.words || "…";
+    if (!state.analyser) state.level = 0.7;   // no meter: each result is a swell
+  };
+  state.rec.onerror = e => {
+    if (listening === state && (e.error === "not-allowed" || e.error === "service-not-allowed"))
+      words.textContent = "The microphone is blocked. Allow it in the address bar, then try again.";
+  };
+  try { state.rec.start(); } catch(e){ /* already started */ }
+  drawRing(state);
+  try {
+    state.stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    if (listening !== state){ state.stream.getTracks().forEach(t => t.stop()); return; }
+    state.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    state.analyser = state.ctx.createAnalyser(); state.analyser.fftSize = 1024;
+    state.ctx.createMediaStreamSource(state.stream).connect(state.analyser);
+    state.buf = new Float32Array(state.analyser.fftSize);
+  } catch(e){ /* no meter: the ring swells on each recognised result instead */ }
+}
+
+// keep: the dot. The words go in the field, unsent, for the person to check.
+function stopListening(keep){
+  const state = listening;
+  if (!state) return;
+  listening = null;
+  try { state.rec.stop(); } catch(e){}
+  if (state.stream) state.stream.getTracks().forEach(t => t.stop());
+  if (state.ctx) state.ctx.close();
+  document.getElementById("listen").hidden = true;
+  const input = document.getElementById("dmsg");
+  if (keep && state.words && input){ input.value = state.words; autogrow(input); input.focus(); }
+}
+
+function wireVoice(){
+  const button = document.getElementById("dvoice");
+  if (!button || !SpeechRec) return;
+  button.hidden = false;
+  button.onclick = startListening;
+  document.getElementById("listen-cancel").onclick = () => stopListening(false);
+  document.getElementById("listen-done").onclick = () => stopListening(true);
+}
+
 // --- bootstrap --------------------------------------------------------------
 applyTheme(consoleTheme || currentTheme());
 watchSlots();
 wireComposer();
+wireVoice();
 syncChatLogs();
 (async () => {
   await refresh();
