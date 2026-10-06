@@ -273,8 +273,12 @@ function drawRing(state){
       let sum = 0; for (const v of state.buf) sum += v * v;
       state.level = Math.min(1.1, 0.04 + Math.sqrt(Math.sqrt(sum / state.buf.length)) * 1.6);
     } else state.level = Math.max(0.06, state.level * 0.95);
+    // Until the person first speaks, the ring breathes: it grows and shrinks
+    // once every 1.6s, so the screen shows it is listening before any sound.
+    if (state.level > 0.3) state.spoke = true;
+    const target = state.spoke ? state.level : 0.02 + 0.5 * (0.5 - 0.5 * Math.cos(now / 1600 * 2 * Math.PI));
     // Rises fast and falls slower, so each syllable shows as its own swell.
-    amp += (state.level - amp) * (state.level > amp ? 0.35 : 0.1);
+    amp += (target - amp) * (target > amp ? 0.35 : 0.1);
     const ground = tokenRGB(probe, "--surface-bg");
     gl.uniform1f(u("uTime"), now * 0.001); gl.uniform1f(u("uAmplitude"), amp);
     gl.uniform2f(u("uResolution"), w, h);
@@ -298,7 +302,7 @@ async function startListening(){
   state.rec.onresult = e => {
     let text = ""; for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
     state.words = text.trim(); words.textContent = state.words || "…";
-    if (!state.analyser) state.level = 0.7;   // no meter: each result is a swell
+    if (!state.analyser){ state.level = 0.7; state.spoke = true; }   // no meter: each result is a swell
   };
   state.rec.onerror = e => {
     if (listening === state && (e.error === "not-allowed" || e.error === "service-not-allowed"))
