@@ -1006,6 +1006,10 @@ dialog.dialog :focus-visible{outline:var(--focus-ring-width) solid var(--accent)
    file so it wins over the dock's width clamp and the narrow-screen rule
    that pins the dock over the page. */
 body.embed #dock{position:relative;width:100%;height:100vh;border-left:none}
+/* The model picker's own row, left-aligned above the chat's buttons. */
+.embed-model{display:flex;padding:var(--space-2) calc(var(--spacing) * 0.5) 0;margin-bottom:var(--space-2);min-width:0}
+.embed-model .modelchip{margin-left:0}
+body.embed .sesshead{padding:0 calc(var(--spacing) * 0.5)}
 
 /* An empty embedded chat: a greeting and three starter prompts (Waku Memory
    spec 054). Square corners, as everywhere on the desktop: the soft corners
